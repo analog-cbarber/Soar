@@ -80,19 +80,18 @@ import java.util.Map.Entry;
  *************************************************************************/
 public class JavaElementXML
 {
+    private static class XMLParseException extends Exception {
+        XMLParseException(String msg) {
+            super(msg);
+        }
+    }
+
     // Lexical analyser for XML stream.
     private static class LexXML
     {
-        // Token types
-        public static final int kSymbol = 1;
-
-        public static final int kIdentifier = 2;
-
-        public static final int kQuotedString = 3;
-
-        public static final int kComment = 4;
-
-        public static final int kEOF = 5;
+        public enum TokenType {
+            SYMBOL, IDENTIFIER, QUOTED_STRING, COMMENT, EOF;
+        }
 
         /************************************************************************
          * The token class represents one element in the input stream. E.g.
@@ -105,15 +104,15 @@ public class JavaElementXML
         {
             private final String m_Value;
 
-            private final int m_Type;
+            private final TokenType m_Type;
 
-            public Token(String value, int type)
+            public Token(String value, TokenType type)
             {
                 m_Value = value;
                 m_Type = type;
             }
 
-            public int getType()
+            public TokenType getType()
             {
                 return this.m_Type;
             }
@@ -124,6 +123,16 @@ public class JavaElementXML
                 return this.m_Value;
             }
             // public void setValue(String s){ this.m_Value = s ; }
+
+            public String toString() {
+                StringBuilder sb = new StringBuilder("Token(type=" + getType());
+                if (!Objects.isNull(getValue()) && !getValue().isEmpty()) {
+                    sb.append(", value=");
+                    sb.append(getValue());
+                }
+                sb.append(")");
+                return sb.toString();
+            }
         }
 
         protected final BufferedReader m_Input;
@@ -273,7 +282,7 @@ public class JavaElementXML
          * Set the value of the current token.
          *
          *************************************************************************/
-        protected void SetCurrentToken(String value, int type)
+        protected void SetCurrentToken(String value, TokenType type)
         {
             m_CurrentToken = new Token(value, type);
         }
@@ -283,13 +292,13 @@ public class JavaElementXML
          * the input stream (e.g. an identifier, or a symbol etc.)
          *
          *************************************************************************/
-        public void GetNextToken() throws Exception
+        public void GetNextToken() throws XMLParseException, IOException
         {
             // If we're already at EOF when we ask
             // for the next token, that's an error.
-            if (IsEOF() && m_CurrentToken.getType() == kEOF)
+            if (IsEOF() && m_CurrentToken.getType() == TokenType.EOF)
             {
-                throw new Exception("Unexpected end of file when parsing file");
+                throw new XMLParseException("Unexpected EOF when parsing file");
             }
 
             // Skip leading white space
@@ -299,14 +308,14 @@ public class JavaElementXML
             // If we're at the end of file, report that as the next token.
             if (IsEOF())
             {
-                SetCurrentToken("", kEOF);
+                SetCurrentToken("", TokenType.EOF);
                 return;
             }
 
             // Symbol token
             if (IsSymbol(getCurrentChar()))
             {
-                SetCurrentToken(String.valueOf(getCurrentChar()), kSymbol);
+                SetCurrentToken(String.valueOf(getCurrentChar()), TokenType.SYMBOL);
 
                 // Consume the symbol.
                 GetNextChar();
@@ -342,7 +351,7 @@ public class JavaElementXML
 
                     // Store the comment (the part lying between <!-- and -->
                     SetCurrentToken(buffer.substring(0, buffer.length() - 3),
-                            kComment);
+                            TokenType.COMMENT);
                 }
 
                 return;
@@ -367,7 +376,7 @@ public class JavaElementXML
                 // Consume the closing quote.
                 GetNextChar();
 
-                SetCurrentToken(buffer.toString(), kQuotedString);
+                SetCurrentToken(buffer.toString(), TokenType.QUOTED_STRING);
                 return;
             }
 
@@ -381,7 +390,7 @@ public class JavaElementXML
                 GetNextChar();
             }
 
-            SetCurrentToken(identifier.toString(), kIdentifier);
+            SetCurrentToken(identifier.toString(), TokenType.IDENTIFIER);
         }
 
         // public Token getCurrentToken()
@@ -401,13 +410,13 @@ public class JavaElementXML
 
         /************************************************************************
          * Returns true if the current token matches the given type. E.g. if
-         * (Have(kSymbol)) { // Process symbol }
+         * (Have(TokenType.SYMBOL)) { // Process symbol }
          *
          * @param type
          *            The type to test against.
          *
          *************************************************************************/
-        public boolean Have(int type) {
+        public boolean Have(TokenType type) {
             return (m_CurrentToken.getType() == type);
         }
 
@@ -461,8 +470,9 @@ public class JavaElementXML
         {
             if (!m_CurrentToken.getValue().equals(value))
             {
-                throw new Exception("Looking for " + value + " instead found "
-                        + m_CurrentToken.getValue());
+                throw new XMLParseException("Found incorrect value when parsing token "
+                    + m_CurrentToken + "; expected value to be \"" + value + "\".");
+
             }
 
             GetNextToken();
@@ -474,17 +484,22 @@ public class JavaElementXML
          * identifiers). If it does not match, throws an exception.
          *
          * @param type
-         *            The type to test (e.g. kSymbol)
+         *            The type to test (e.g. TokenType.SYMBOL)
          *
          * @return The value of the current token (if matches type).
          *
          *************************************************************************/
-        public String MustBe(int type) throws Exception
+        public String MustBe(TokenType type) throws Exception
         {
             if (m_CurrentToken.getType() != type)
             {
-                throw new Exception("Found incorrect type when parsing token "
-                        + m_CurrentToken.getValue());
+                if (m_CurrentToken.getType() == TokenType.EOF) {
+                    // EOF token contains no useful information, so write a custom message
+                    throw new XMLParseException("The end of the XML document appears to be missing (is it missing some closing tags?).");
+                }
+
+                throw new XMLParseException("Found incorrect type when parsing token "
+                        + m_CurrentToken + "; expected type to be " + type + ".");
             }
 
             String result = m_CurrentToken.getValue();
@@ -504,7 +519,7 @@ public class JavaElementXML
         // {
         // if (m_CurrentToken.getType() != type)
         // {
-        // throw new Exception("Found incorrect type when parsing token " +
+        // throw new XMLParseException("Found incorrect type when parsing token " +
         // m_CurrentToken.getValue()) ;
         // }
         // MustBe(value) ;
@@ -597,8 +612,8 @@ public class JavaElementXML
         // Check there are no spaces in the tag name -- spaces make it hard to
         // parse when reading the file.
         if (tagName.contains(" "))
-            throw new Error(
-                    "Not allowed tag names with spaces inside them -- at least not for my form of XML");
+            throw new IllegalArgumentException(
+                    "Tag name \"" + tagName + "\" contains a space, which is not allowed -- at least not for my form of XML");
 
         this.m_TagName = tagName;
     }
@@ -733,7 +748,7 @@ public class JavaElementXML
      *            The body of this tag ([tag]"contents"[/tag])
      *
      *************************************************************************/
-    public JavaElementXML(String tagName, String contents)
+    public JavaElementXML(String tagName, String contents) throws XMLParseException
     {
         this(tagName);
 
@@ -825,8 +840,8 @@ public class JavaElementXML
         String value = this.m_Attributes.get(name);
 
         if (value == null)
-            throw new Exception("Could not find attribute " + name
-                    + " while parsing XML document");
+            throw new XMLParseException("Could not find attribute " + name
+                    + " while parsing XML tag " + m_TagName);
 
         return value;
     }
@@ -951,7 +966,7 @@ public class JavaElementXML
         if (val.equalsIgnoreCase("false"))
             return false;
 
-        throw new Exception("Could not parse the attribute " + name + ":" + val
+        throw new XMLParseException("Could not parse the attribute " + name + ":" + val
                 + " as a boolean");
     }
 
@@ -1075,8 +1090,8 @@ public class JavaElementXML
     public void addAttribute(String name, String value)
     {
         if (name.contains(" "))
-            throw new Error(
-                    "Can't have attribute names that contain a space -- won't parse correctly");
+            throw new IllegalArgumentException(
+                    "Attribute name \"" + name + "\" contains a space, which is not allowed.");
 
         this.m_Attributes.put(name, value);
     }
@@ -1143,7 +1158,7 @@ public class JavaElementXML
         JavaElementXML child = findChildByAtt(attName, value);
 
         if (child == null)
-            throw new Exception("Could not find child node with name: "
+            throw new XMLParseException("Could not find child node with name: "
                     + attName + " while parsing XML document");
 
         return child;
@@ -1163,7 +1178,7 @@ public class JavaElementXML
         JavaElementXML child = findChildByName(tagName);
 
         if (child == null)
-            throw new Exception("Could not find child node with name: "
+            throw new XMLParseException("Could not find child node with name: "
                     + tagName + " while parsing XML document");
 
         return child;
@@ -1295,7 +1310,7 @@ public class JavaElementXML
         }
 
         // Get the tag name
-        String tagName = lex.MustBe(LexXML.kIdentifier);
+        String tagName = lex.MustBe(LexXML.TokenType.IDENTIFIER);
 
         // Create the object we'll be returning
         JavaElementXML element = new JavaElementXML(tagName);
@@ -1308,7 +1323,7 @@ public class JavaElementXML
         }
 
         // Read all of the attributes (if there are any)
-        while (lex.Have(LexXML.kIdentifier))
+        while (lex.Have(LexXML.TokenType.IDENTIFIER))
         {
             String name = lex.getCurrentTokenValue();
 
@@ -1319,7 +1334,7 @@ public class JavaElementXML
             lex.MustBe(kEqualsString);
 
             // Then must be followed by a string containing the value
-            String value = lex.MustBe(LexXML.kQuotedString);
+            String value = lex.MustBe(LexXML.TokenType.QUOTED_STRING);
             value = convertFromEscapes(value);
 
             element.addAttribute(name, value);
@@ -1333,7 +1348,7 @@ public class JavaElementXML
 
         while (!endTag && !lex.IsEOF())
         {
-            if (lex.Have(LexXML.kQuotedString))
+            if (lex.Have(LexXML.TokenType.QUOTED_STRING))
             {
                 // Quoted strings are used to contain content values
                 String contents = lex.getCurrentTokenValue();
@@ -1344,7 +1359,7 @@ public class JavaElementXML
                 continue;
             }
 
-            if (lex.Have(LexXML.kComment))
+            if (lex.Have(LexXML.TokenType.COMMENT))
             {
                 // We'll only allow comments before other XML elements. That
                 // allows us to "hide" the comment within the existing
@@ -1385,10 +1400,10 @@ public class JavaElementXML
 
         // Once we reach the end marker "</" we just need to finish up the
         // stream.
-        tagName = lex.MustBe(LexXML.kIdentifier);
+        tagName = lex.MustBe(LexXML.TokenType.IDENTIFIER);
 
         if (!tagName.equals(element.getTagName()))
-            throw new Exception("The closing tag for " + element.getTagName()
+            throw new XMLParseException("The closing tag for " + element.getTagName()
                     + " doesn't match the opening tag");
 
         // Then we must have the close tag.
@@ -1420,7 +1435,7 @@ public class JavaElementXML
         // This is really the root of a tree of nodes.
         while (element == null)
         {
-            if (lex.Have(LexXML.kComment))
+            if (lex.Have(LexXML.TokenType.COMMENT))
             {
                 // We'll only allow comments before other XML elements. That
                 // allows us to "hide" the comment within the existing
@@ -1630,7 +1645,7 @@ public class JavaElementXML
 
         // If there is no class name, nothing to create.
         if (className == null)
-            throw new Exception(
+            throw new XMLParseException(
                     "This XML object does not have a class attribute, so no object can be built from it");
 
         try
@@ -1686,7 +1701,7 @@ public class JavaElementXML
 
         // If there is no class name, nothing to create.
         if (className == null)
-            throw new Exception(
+            throw new XMLParseException(
                     "This XML object does not have a class attribute, so no object can be built from it");
 
         try
