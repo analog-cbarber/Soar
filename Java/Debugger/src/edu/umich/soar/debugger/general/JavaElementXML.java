@@ -158,7 +158,7 @@ public class JavaElementXML
             // just standardize on that)
             // This means we need to replace any \r\n combinations Windows
             // inserts with just \n
-            m_CurrentLine.replaceAll(kSystemLineSeparator, kLineSeparator);
+            m_CurrentLine = m_CurrentLine.replaceAll(kSystemLineSeparator, kLineSeparator);
 
             // Add the newline char(s) to the end of the line we read.
             // This generally only matters when reading quoted strings that
