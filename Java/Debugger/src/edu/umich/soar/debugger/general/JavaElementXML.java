@@ -15,8 +15,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 import java.util.Map.Entry;
 
 /************************************************************************
@@ -563,11 +562,11 @@ public class JavaElementXML
     protected static final String kSystemLineSeparator = System
             .getProperty("line.separator");
 
-    /** List of attribute names and string values */
-    protected final HashMap<String, String> m_AttributeList = new HashMap<>();
+    /** Map from attribute names to their string values, sorted by attribute name to keep stringification deterministic */
+    protected final Map<String, String> m_Attributes = new TreeMap<>();
 
     /** List of elements contained in this element */
-    protected final ArrayList<JavaElementXML> m_ChildElementList = new ArrayList<>();
+    protected final List<JavaElementXML> m_ChildElementList = new ArrayList<>();
 
     /** The tag for this item */
     protected String m_TagName;
@@ -820,9 +819,9 @@ public class JavaElementXML
      * (String to String).
      *
      *************************************************************************/
-    public HashMap<String, String> getAttributeMap()
+    public Map<String, String> getAttributeMap()
     {
-        return this.m_AttributeList;
+        return this.m_Attributes;
     }
 
     /************************************************************************
@@ -832,7 +831,7 @@ public class JavaElementXML
      *************************************************************************/
     public String getAttribute(String name)
     {
-        return this.m_AttributeList.get(name);
+        return this.m_Attributes.get(name);
     }
 
     /************************************************************************
@@ -843,7 +842,7 @@ public class JavaElementXML
      *************************************************************************/
     public String getAttributeThrows(String name) throws Exception
     {
-        String value = this.m_AttributeList.get(name);
+        String value = this.m_Attributes.get(name);
 
         if (value == null)
             throw new Exception("Could not find attribute " + name
@@ -1015,7 +1014,7 @@ public class JavaElementXML
      * ElementXML objects.
      *
      *************************************************************************/
-    protected ArrayList<JavaElementXML> getChildElementList()
+    protected List<JavaElementXML> getChildElementList()
     {
         return this.m_ChildElementList;
     }
@@ -1059,7 +1058,7 @@ public class JavaElementXML
      *
      * Removes a child from the XML tree
      *
-     * @param existingChild
+     * @param child
      *            The child being removed
      *
      * @return True if removal succeeds (i.e. existingChild is found)
@@ -1115,7 +1114,7 @@ public class JavaElementXML
             throw new Error(
                     "Can't have attribute names that contain a space -- won't parse correctly");
 
-        this.m_AttributeList.put(name, value);
+        this.m_Attributes.put(name, value);
     }
 
     /************************************************************************
@@ -1174,7 +1173,7 @@ public class JavaElementXML
      * Find a child element based on an attribute and value If the child does
      * not exist, this version throws an exception.
      *
-     * @param tagName
+     * @param attName
      *            The name to match against
      *
      *************************************************************************/
@@ -1530,7 +1529,7 @@ public class JavaElementXML
         buffer.append(m_TagName);
 
         // Get the list of attributes
-        java.util.Set<Entry<String, String>> entrySet = this.m_AttributeList
+        java.util.Set<Entry<String, String>> entrySet = this.m_Attributes
                 .entrySet();
 
         // Go through each attribute
