@@ -989,8 +989,9 @@ public class FoldingText
         int line = adjustedMouseY / lineHeight;
 
         if (line > m_Text.getLineCount()) {
-            System.err.println("WARNING: Right-clicked line number is greater than " +
-                "the number of lines in the text widget.");
+            // user right-clicked in the panel somewhere below the last line
+//            System.err.println("INFO: Right-clicked line number is greater than " +
+//                "the number of lines in the text widget.");
             return -1;
         }
 
