@@ -15,8 +15,12 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.Map.Entry;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /************************************************************************
  * IMPORTANT NOTES ON THIS CLASS: This class was written long before SML
@@ -1209,21 +1213,22 @@ public class JavaElementXML
      *            The path name of the output file.
      *
      *************************************************************************/
-    public void WriteToFile(String filename) throws java.io.IOException
-    {
-        // Create the file.
-        FileWriter fw = new FileWriter(filename);
-        BufferedWriter output = new BufferedWriter(fw);
+    public void WriteToFile(String filename) throws java.io.IOException {
+        // We write to a temp file first and then rename the temp file to the desired file name.
+        // This prevents us from writing over an existing XML file with a partial (and therefore
+        // invalid!) one if an exception occurs in the middle of the XML serialization.
 
-        // Write out the header
-        JavaElementXML.WriteHeader(output);
+        String tempFilename = filename + ".temp";
+        Path tempPath = Paths.get(tempFilename);
 
-        // Write out the stream
-        WriteToStream(output, 0);
+        try (BufferedWriter output = Files.newBufferedWriter(tempPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            JavaElementXML.WriteHeader(output);
 
-        // Clean up
-        output.close();
-        fw.close();
+            WriteToStream(output, 0);
+        }
+
+        Path finalPath = Paths.get(filename);
+        Files.move(tempPath, finalPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
 
     public String WriteToString()
@@ -1508,12 +1513,12 @@ public class JavaElementXML
             String value = entry.getValue();
 
             // Write out the attribute name and value (e.g. name="value")
-            buffer.append(" ");
+            buffer.append(' ');
             buffer.append(name);
-            buffer.append("=");
-            buffer.append("\"");
+            buffer.append('=');
+            buffer.append('"');
             buffer.append(convertToEscapes(value));
-            buffer.append("\"");
+            buffer.append('"');
         }
 
         // Close the tag itself

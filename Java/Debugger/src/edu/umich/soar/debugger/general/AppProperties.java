@@ -12,6 +12,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 
 public class AppProperties extends java.util.Properties
 {
@@ -145,11 +149,21 @@ public class AppProperties extends java.util.Properties
 
     }
 
-    public void Save() throws java.io.IOException
-    {
+    public void Save() throws java.io.IOException {
+        // write to a temp file first, then make the final changes via a rename.
+        // this prevents us from overwriting the file with an incomplete config,
+        // as could be the case if we hit an IO exception in the middle of writing
+        // the file.
         File filePath = this.GetFilePath();
-        FileOutputStream output = new FileOutputStream(filePath);
-        this.store(output, this.m_Header);
+        String tempFilename = filePath.getAbsolutePath() + ".temp";
+        Path tempPath = Paths.get(tempFilename);
+        Path finalPath = filePath.toPath();
+
+        try (FileOutputStream output = new FileOutputStream(tempPath.toFile())) {
+            this.store(output, this.m_Header);
+        }
+
+        Files.move(tempPath, finalPath, StandardCopyOption.REPLACE_EXISTING);
     }
 
     public String getFilename()
