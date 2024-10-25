@@ -204,6 +204,10 @@ public class JavaElementXML
             if (m_Pos >= m_CurrentLine.length())
             {
                 m_CurrentLine = m_Input.readLine();
+                if (m_CurrentLine == null) {
+                    // end of the file
+                    return;
+                }
 
                 // Add the newline char(s) to the end of the line we read.
                 // This generally only matters when reading quoted strings that
@@ -1327,7 +1331,7 @@ public class JavaElementXML
 
         boolean endTag = false;
 
-        while (!endTag)
+        while (!endTag && !lex.IsEOF())
         {
             if (lex.Have(LexXML.kQuotedString))
             {
